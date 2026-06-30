@@ -70,3 +70,27 @@ verify-release:
 		--dir "$(CANDIDATE_DIR)" \
 		--tag "$(TAG)" \
 		--commit "$(COMMIT)"
+IMAGE  ?= wacli
+TAG    ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
+BINARY ?= dist/wacli
+
+CGO_CFLAGS_EXTRA := -Wno-error=missing-braces
+
+.PHONY: build docker test lint clean
+
+build: ## Build the local binary (requires CGO / sqlite3)
+	mkdir -p dist
+	CGO_ENABLED=1 CGO_CFLAGS="$(CGO_CFLAGS_EXTRA)" \
+	  go build -tags sqlite_fts5 -o $(BINARY) ./cmd/wacli
+
+docker: ## Build the Docker image (IMAGE=wacli TAG=<git-describe>)
+	docker build -t $(IMAGE):$(TAG) .
+
+test: ## Run the test suite
+	go test ./...
+
+lint: ## Run go vet
+	go vet ./...
+
+clean: ## Remove build output
+	rm -rf dist/
