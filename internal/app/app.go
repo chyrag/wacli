@@ -95,6 +95,8 @@ type WAClient interface {
 	Logout(ctx context.Context) error
 	LinkedJID() string
 	LinkedLID() string
+	OwnJID() types.JID
+	StarMessage(ctx context.Context, info types.MessageInfo, starred bool) error
 
 	SetProfilePicture(ctx context.Context, avatar []byte) (string, error)
 	GetProfilePictureInfo(ctx context.Context, jid types.JID, preview bool, existingID string) (*types.ProfilePictureInfo, error)

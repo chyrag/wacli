@@ -26,6 +26,7 @@ func newMessagesCmd(flags *rootFlags) *cobra.Command {
 	cmd.AddCommand(newMessagesListCmd(flags))
 	cmd.AddCommand(newMessagesSearchCmd(flags))
 	cmd.AddCommand(newMessagesStarredCmd(flags))
+	cmd.AddCommand(newMessagesStarCmd(flags))
 	cmd.AddCommand(newMessagesShowCmd(flags))
 	cmd.AddCommand(newMessagesContextCmd(flags))
 	cmd.AddCommand(newMessagesExportCmd(flags))
@@ -1202,4 +1203,114 @@ func forwardedContextInfo(forwardingScore uint32) *waProto.ContextInfo {
 		IsForwarded:     proto.Bool(true),
 		ForwardingScore: proto.Uint32(forwardingScore),
 	}
+}
+
+func newMessagesStarCmd(flags *rootFlags) *cobra.Command {
+	var chat string
+	var id string
+	var unstar bool
+
+	cmd := &cobra.Command{
+		Use:   "star",
+		Short: "Star (or unstar) a message",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if strings.TrimSpace(chat) == "" || strings.TrimSpace(id) == "" {
+				return fmt.Errorf("--chat and --id are required")
+			}
+			if err := flags.requireWritable(); err != nil {
+				return err
+			}
+
+			ctx, cancel := withTimeout(context.Background(), flags)
+			defer cancel()
+
+			a, lk, err := newApp(ctx, flags, true, false)
+			if err != nil {
+				return err
+			}
+			defer closeApp(a, lk)
+
+			if err := a.EnsureAuthed(); err != nil {
+				return err
+			}
+			msg, chatJID, err := loadMessageMutationTarget(ctx, a, chat, id)
+			if err != nil {
+				return err
+			}
+
+			starred := !unstar
+
+			if err := a.Connect(ctx, false, nil); err != nil {
+				return err
+			}
+
+			info, err := messageInfoForStar(msg, chatJID, a.WA().OwnJID())
+			if err != nil {
+				return err
+			}
+
+			if err := a.WA().StarMessage(ctx, info, starred); err != nil {
+				return err
+			}
+
+			now := time.Now().UTC()
+			if err := a.DB().SetStarred(store.SetStarredParams{
+				ChatJID:   msg.ChatJID,
+				MsgID:     msg.MsgID,
+				SenderJID: msg.SenderJID,
+				FromMe:    msg.FromMe,
+				Starred:   starred,
+				StarredAt: now,
+			}); err != nil {
+				return fmt.Errorf("store star state: %w", err)
+			}
+
+			action := "Starred"
+			if !starred {
+				action = "Unstarred"
+			}
+
+			if flags.asJSON {
+				return out.WriteJSON(os.Stdout, map[string]any{
+					"starred": starred,
+					"chat":    chatJID.String(),
+					"id":      msg.MsgID,
+				})
+			}
+			fmt.Fprintf(os.Stdout, "%s message %s in %s\n", action, msg.MsgID, chatJID.String())
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&chat, "chat", "", "chat JID, phone number, or contact/group/chat name")
+	cmd.Flags().StringVar(&id, "id", "", "message ID to star")
+	cmd.Flags().BoolVar(&unstar, "unstar", false, "remove the star instead of adding it")
+	return cmd
+}
+
+func messageInfoForStar(msg store.Message, chat types.JID, ownJID types.JID) (types.MessageInfo, error) {
+	sender := types.EmptyJID
+	if strings.TrimSpace(msg.SenderJID) != "" {
+		parsed, err := types.ParseJID(msg.SenderJID)
+		if err != nil {
+			return types.MessageInfo{}, fmt.Errorf("stored sender JID is invalid: %w", err)
+		}
+		sender = parsed
+	} else if msg.FromMe {
+		sender = ownJID
+	} else if chat.Server == types.DefaultUserServer {
+		sender = chat
+	}
+	if !msg.FromMe && chat.Server == types.GroupServer && sender.IsEmpty() {
+		return types.MessageInfo{}, fmt.Errorf("stored sender JID is required to star a group message")
+	}
+	return types.MessageInfo{
+		MessageSource: types.MessageSource{
+			Chat:     chat,
+			Sender:   sender,
+			IsFromMe: msg.FromMe,
+			IsGroup:  chat.Server == types.GroupServer,
+		},
+		ID:        types.MessageID(msg.MsgID),
+		Timestamp: msg.Timestamp,
+	}, nil
 }

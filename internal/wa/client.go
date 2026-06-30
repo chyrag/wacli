@@ -91,6 +91,25 @@ func (c *Client) IsConnected() bool {
 	return c.client != nil && c.client.IsConnected()
 }
 
+func (c *Client) OwnJID() types.JID {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.client == nil || c.client.Store == nil {
+		return types.EmptyJID
+	}
+	return c.client.Store.GetJID().ToNonAD()
+}
+
+func (c *Client) StarMessage(ctx context.Context, info types.MessageInfo, starred bool) error {
+	c.mu.Lock()
+	cli := c.client
+	c.mu.Unlock()
+	if cli == nil || !cli.IsConnected() {
+		return fmt.Errorf("not connected")
+	}
+	return cli.SendAppState(ctx, appstate.BuildStar(info.Chat, info.Sender, info.ID, info.IsFromMe, starred))
+}
+
 func (c *Client) SetAutoReconnect(enabled bool) (bool, bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()

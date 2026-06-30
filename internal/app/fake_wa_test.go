@@ -860,3 +860,12 @@ func (f *fakeWA) LinkedLID() string {
 	}
 	return f.linkedLID
 }
+
+func (f *fakeWA) OwnJID() types.JID {
+	jid, _ := types.ParseJID(f.LinkedJID())
+	return jid
+}
+
+func (f *fakeWA) StarMessage(ctx context.Context, info types.MessageInfo, starred bool) error {
+	return nil
+}
