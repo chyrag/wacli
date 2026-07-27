@@ -45,8 +45,8 @@ For local development:
 ```bash
 git clone https://github.com/openclaw/wacli.git
 cd wacli
-CGO_ENABLED=1 CGO_CFLAGS="-Wno-error=missing-braces" \
-  go build -tags sqlite_fts5 -o ./dist/wacli ./cmd/wacli
+make build
+make check
 ./dist/wacli --help
 ```
 

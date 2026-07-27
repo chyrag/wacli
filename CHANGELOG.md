@@ -10,6 +10,7 @@
 
 - Dependencies: update `whatsmeow`, terminal support, GraphQL parsing, and supporting Go modules.
 - Build: migrate `sqlc` code generator to Go 1.24+ `go tool` directive and bump project toolchain requirement to Go 1.26.5. (#313 - thanks @thedavidweng)
+- Build: standardize the Makefile's build, check, snapshot, and verified local-release targets across the crawler repositories.
 
 ## 0.15.0 - 2026-07-23
 

@@ -76,19 +76,30 @@ The downloader uses only GitHub `GET` requests, validates the exact workflow/run
 
 ### 2. Local Darwin build, signing, and notarization
 
-Run the local preparer through the `release-mac-app` skill's `mac-release codesign-run` wrapper so the dedicated Developer ID keychain is bounded and restored. Set `MAC_RELEASE` to that skill's `scripts/mac-release` helper. Supply `MAC_RELEASE_CODESIGN_IDENTITY` and `NOTARYTOOL_KEYCHAIN_PROFILE` only at runtime through approved credential handling.
+Run the local preparer through the Makefile's official `release` target. It
+delegates to the `release-mac-app` skill's `mac-release codesign-run` wrapper so
+the dedicated Developer ID keychain is bounded and restored. Set `MAC_RELEASE`
+to that skill's `scripts/mac-release` helper. Supply
+`MAC_RELEASE_CODESIGN_IDENTITY` and `NOTARYTOOL_KEYCHAIN_PROFILE` only at runtime
+through approved credential handling.
 
 ```bash
-"$MAC_RELEASE" codesign-run -- \
-  node scripts/release-local.mjs prepare \
-    --tag "$tag" \
-    --commit "$commit" \
-    --cross-platform-dir /path/to/authenticated-cross-assets \
-    --cross-platform-manifest-sha256 "$cross_manifest" \
-    --output "dist/release/$tag"
+make release \
+  TAG="$tag" \
+  COMMIT="$commit" \
+  CROSS_PLATFORM_DIR=/path/to/authenticated-cross-assets \
+  CROSS_PLATFORM_MANIFEST_SHA256="$cross_manifest" \
+  MAC_RELEASE="$MAC_RELEASE" \
+  RELEASE_OUTPUT="dist/release/$tag"
 ```
 
 Preparation is local and fail-closed. It completes source and every thin platform binary vulnerability check, signs both Darwin thin binaries, creates and signs the universal binary, submits one ZIP containing all three final Darwin binaries to `notarytool`, verifies the online notarization constraint, assembles all seven assets, and re-verifies the complete candidate before moving it into the output directory. It performs no GitHub or Homebrew mutation.
+
+To re-run that artifact verification without signing or publishing:
+
+```bash
+make verify-release TAG="$tag" COMMIT="$commit" CANDIDATE_DIR="dist/release/$tag"
+```
 
 ### 3. Create and verify the signed release tag
 
