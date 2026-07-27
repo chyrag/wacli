@@ -15,6 +15,7 @@ import {
   parseChecksums,
   releaseArchiveTarget,
   releaseAssetNames,
+  releaseGoVersionForCommit,
   releaseManifestDigest,
   runCommand,
   sanitizedExecutionEnv,
@@ -419,6 +420,15 @@ test("binary build info is bound to the exact clean candidate commit", () => {
         }),
       /not go1\.26\.5/,
     );
+    assert.doesNotThrow(() =>
+      assertGoBuildInfo(binary, version, {
+        run: runWithInfo({ ...buildInfo, GoVersion: "go1.25.12" }),
+        commit,
+        expectedGoVersion: "go1.25.12",
+        expectedGoos: "darwin",
+        expectedGoarch: "arm64",
+      }),
+    );
 
     const wrongVersionBuildInfo = {
       ...buildInfo,
@@ -474,6 +484,24 @@ test("binary build info is bound to the exact clean candidate commit", () => {
   } finally {
     fs.rmSync(directory, { recursive: true, force: true });
   }
+});
+
+test("release verification derives the Go version from the immutable release commit", () => {
+  const calls = [];
+  const run = (command, args, options) => {
+    calls.push([command, args, options]);
+    return { stdout: "module github.com/openclaw/wacli\n\ngo 1.25.12\n", stderr: "" };
+  };
+  assert.equal(releaseGoVersionForCommit(commit, { run }), "go1.25.12");
+  assert.deepEqual(calls[0].slice(0, 2), ["git", ["show", `${commit}:go.mod`]]);
+
+  assert.throws(
+    () =>
+      releaseGoVersionForCommit(commit, {
+        run: () => ({ stdout: "module github.com/openclaw/wacli\n\ngo 1.25\n", stderr: "" }),
+      }),
+    /must declare one exact Go version/,
+  );
 });
 
 test("official builders preserve trimpath and linked-version symbols", () => {

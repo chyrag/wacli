@@ -39,6 +39,17 @@ export function assertCommit(commit) {
   }
 }
 
+export function releaseGoVersionForCommit(commit, options = {}) {
+  assertCommit(commit);
+  const run = options.run ?? runCommand;
+  const result = run("git", ["show", `${commit}:go.mod`], { cwd: repositoryRoot });
+  const matches = [...String(result.stdout).matchAll(/^go (\d+\.\d+\.\d+)$/gm)];
+  if (matches.length !== 1) {
+    throw new Error(`release commit ${commit} must declare one exact Go version in go.mod`);
+  }
+  return `go${matches[0][1]}`;
+}
+
 export function archiveNames(version) {
   return [
     `wacli_${version}_darwin_amd64.tar.gz`,
@@ -318,6 +329,10 @@ export function assertGoBuildInfo(binary, version, options = {}) {
   if (!options.expectedGoos || !options.expectedGoarch) {
     throw new Error("expected GOOS and GOARCH are required for release build verification");
   }
+  const expectedGoVersion = options.expectedGoVersion ?? RELEASE_GO_VERSION;
+  if (!/^go\d+\.\d+\.\d+$/.test(expectedGoVersion)) {
+    throw new Error("expected Go version must look like goX.Y.Z");
+  }
   const result = run("go", ["version", "-m", "-json", binary], {
     env: sanitizedExecutionEnv({}, options.env ?? process.env),
   });
@@ -327,9 +342,9 @@ export function assertGoBuildInfo(binary, version, options = {}) {
   } catch {
     throw new Error(`${path.basename(binary)} has malformed Go build information`);
   }
-  if (buildInfo.GoVersion !== RELEASE_GO_VERSION) {
+  if (buildInfo.GoVersion !== expectedGoVersion) {
     throw new Error(
-      `${path.basename(binary)} was built with ${buildInfo.GoVersion ?? "unknown"}, not ${RELEASE_GO_VERSION}`,
+      `${path.basename(binary)} was built with ${buildInfo.GoVersion ?? "unknown"}, not ${expectedGoVersion}`,
     );
   }
   if (buildInfo.Path !== "github.com/openclaw/wacli/cmd/wacli") {
